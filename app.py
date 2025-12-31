@@ -48,7 +48,6 @@ def get_db():
     return firestore.client()
 
 # 4. 데이터 로드 (캐싱 적용 + 예외 처리)
-@st.cache_data
 def load_data():
     try:
         db = get_db()
@@ -192,7 +191,6 @@ def render_order_form(db):
                     "status": "발주접수", "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 db.collection("production_orders").add(doc)
-                load_data.clear() # 데이터 갱신
                 st.success("등록되었습니다.")
                 time.sleep(0.5)
                 st.rerun()
@@ -282,7 +280,6 @@ def render_admin_manage(db):
                 for _, r in sel.iterrows():
                     db.collection("production_orders").document(r['id']).update(upd)
                     cnt += 1
-                load_data.clear() # 데이터 갱신
                 st.success(f"{cnt}건 업데이트 완료")
                 time.sleep(0.5)
                 st.rerun()
@@ -305,7 +302,6 @@ def render_admin_manage(db):
             if st.button("전체 삭제 실행", type="primary"):
                 all_docs = db.collection("production_orders").stream()
                 for d in all_docs: d.reference.delete()
-                load_data.clear()
                 st.success("삭제 완료")
                 st.rerun()
 
@@ -320,7 +316,6 @@ def render_excel_upload(db):
                 doc = {str(k): str(v) for k, v in row.items()}
                 doc['status'] = '발주접수'
                 db.collection("production_orders").add(doc)
-            load_data.clear()
             st.success("완료")
 
 # 7. 실행 진입점 (가장 중요: if-else 구조로 분리)
