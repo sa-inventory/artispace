@@ -14,7 +14,7 @@ st.set_page_config(page_title="발주현황 조회 시스템", layout="wide", pa
 # 2. 스타일 커스텀
 st.markdown("""
 <style>
-    .block-container {padding-top: 1rem; padding-bottom: 2rem;}
+    .block-container {padding-top: 3rem; padding-bottom: 2rem;}
     /* 버튼 너비 꽉 차게 */
     div.stButton > button {width: 100%;}
 </style>
