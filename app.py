@@ -279,8 +279,9 @@ with tab2:
     if data:
         df = pd.DataFrame(data)
         
-        # 날짜 변환 (비교를 위해 datetime64 객체로 변환)
-        df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce')
+        # 날짜 변환 (비교를 위해 datetime64 객체로 변환 및 시간 제거)
+        # dt.normalize()를 사용하여 시간 정보를 00:00:00으로 통일 (비교 오류 및 데이터 누락 방지)
+        df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce').dt.normalize()
         
         # date_input을 위한 min/max 계산 (NaT 처리)
         min_ts = df['order_date_dt'].min()
