@@ -295,20 +295,3 @@ with tab2:
                     st.rerun()
     else:
         st.write("업데이트할 주문 내역이 없습니다.")
-        
-    # 🧪 테스트용 샘플 데이터 생성 버튼
-    st.divider()
-    if st.button("🎲 테스트용 샘플 데이터 생성하기"):
-        sample_data = [
-            {"client_name": "ABC물산", "product_name": "고급 린넨 A타입", "quantity": 500, "unit": "yds", "status": "제직공정", "delivery_to": "서울 물류센터", "note": "긴급 발주"},
-            {"client_name": "XYZ패션", "product_name": "S/S 셔츠 원단", "quantity": 1200, "unit": "meter", "status": "염색공정", "delivery_to": "부산 공장", "note": "색상 확인 요망"},
-            {"client_name": "대한어패럴", "product_name": "F/W 자켓용", "quantity": 300, "unit": "kg", "status": "발주접수", "delivery_to": "인천 창고", "note": ""}
-        ]
-        
-        for data in sample_data:
-            data["order_date"] = datetime.datetime.now().strftime("%Y-%m-%d")
-            data["last_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            db.collection("production_orders").add(data)
-            
-        st.success("샘플 데이터 3건이 생성되었습니다! '진행상황 조회' 탭에서 확인해보세요.")
-        st.rerun()
