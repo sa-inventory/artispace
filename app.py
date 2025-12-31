@@ -32,7 +32,8 @@ def get_db():
                 if "private_key" in key_dict:
                     key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
                 cred = credentials.Certificate(key_dict)
-        except: pass
+        except Exception as e:
+            st.warning(f"⚠️ Secrets 설정 오류 감지: {e}")
         
         if cred is None:
             key_path = os.path.join(os.path.dirname(__file__), "serviceAccountKey.json")
@@ -40,6 +41,10 @@ def get_db():
                 cred = credentials.Certificate(key_path)
         
         if cred: firebase_admin.initialize_app(cred)
+        
+        if not firebase_admin._apps:
+            st.error("❌ Firebase 연결 실패: 인증 키를 찾을 수 없습니다. Streamlit Secrets 설정을 확인해주세요.")
+            st.stop()
     return firestore.client()
 
 # 4. 데이터 로드 (캐싱 적용 + 예외 처리)
@@ -50,7 +55,8 @@ def load_data():
         docs = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
         data = [{"id": d.id, **d.to_dict()} for d in docs]
         return pd.DataFrame(data)
-    except Exception:
+    except Exception as e:
+        st.error(f"❌ 데이터 불러오기 실패: {e}")
         return pd.DataFrame()
 
 # 5. 화면 1: 로그인 페이지
