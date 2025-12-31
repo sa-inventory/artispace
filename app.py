@@ -50,6 +50,8 @@ try:
     db = get_db()
 except Exception as e:
     st.error(f"⚠️ 데이터베이스 연결 실패: {e}")
+    if "default Firebase app does not exist" in str(e):
+        st.warning("☁️ Streamlit Cloud의 [Secrets] 설정이 빠져있거나 잘못되었습니다. 앱 설정 메뉴에서 키 값을 확인해주세요.")
     st.stop()
 
 # 공정 단계 정의
