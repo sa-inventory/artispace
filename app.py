@@ -8,7 +8,7 @@ import json
 import os
 
 # 1. 페이지 기본 설정
-st.set_page_config(page_title="아티스린넨 발주내역 진행상황", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="아티스린넨 발주내역", layout="wide", page_icon="🏭")
 
 # 2. 데이터베이스 연결 (Firebase)
 @st.cache_resource
@@ -73,7 +73,7 @@ except Exception as e:
 PROCESS_STAGES = ["발주접수", "제직공정", "염색공정", "봉제공정", "출고완료"]
 
 # 메인 타이틀
-st.title("🏭 Artispace 실시간 공정 현황")
+st.title("아티스린넨 발주내역")
 st.markdown("---")
 
 # 탭 구성: 조회용(거래처) / 입력용(관리자)
@@ -138,18 +138,103 @@ with tab1:
 # 탭 2: 관리자 입력 화면
 # ==========================================
 with tab2:
-    st.subheader("📝 신규 발주 등록")
+    st.subheader(" 엑셀 일괄 업로드")
+    st.info("엑셀 파일의 첫 번째 줄(헤더)에 다음 항목들이 포함되어 있어야 합니다: 업체명, 품명, 발주수량, 발주일, 납품일, 규격, 색상 등")
+    
+    uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=['xlsx', 'xls'])
+    
+    if uploaded_file:
+        try:
+            # 엑셀 읽기
+            df = pd.read_excel(uploaded_file)
+            
+            # 컬럼명 정리 (줄바꿈 제거 등)
+            df.columns = [str(c).replace('\n', ' ').strip() for c in df.columns]
+            
+            st.write("📊 데이터 미리보기 (상위 5개):")
+            st.dataframe(df.head())
+            
+            if st.button("💾 엑셀 데이터 DB 저장하기"):
+                progress_bar = st.progress(0)
+                success_count = 0
+                
+                for idx, row in df.iterrows():
+                    # 엑셀 데이터 매핑
+                    # (값이 없으면 빈 문자열이나 0으로 처리)
+                    doc_data = {
+                        "client_name": str(row.get("업체명", "")),
+                        "product_name": str(row.get("품명", "")),
+                        "quantity": row.get("발주수량", 0),
+                        "unit": str(row.get("규격", "yds")), # 규격을 단위로 사용
+                        "order_date": str(row.get("발주일", datetime.datetime.now().strftime("%Y-%m-%d"))),
+                        "delivery_date": str(row.get("납품일", "")),
+                        "delivery_to": str(row.get("운송처", "")),
+                        "manager": str(row.get("발주담당자", "")),
+                        "order_type": str(row.get("구분(신규/추가)", "")),
+                        "work_site": str(row.get("작업지", "")),
+                        "weaving": str(row.get("제직", "")),
+                        "dyeing": str(row.get("염색", "")),
+                        "weight": str(row.get("중량", "")),
+                        "yarn_type": str(row.get("사종", "")),
+                        "color": str(row.get("색상", "")),
+                        "contact": str(row.get("연락처", "")),
+                        "email_sent_date": str(row.get("e-mail 발송일", "")),
+                        "note": str(row.get("비 고", "")),
+                        "status": "발주접수",
+                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    # 날짜 형식이 datetime 객체인 경우 문자열로 변환
+                    for key, val in doc_data.items():
+                        if isinstance(val, (datetime.datetime, datetime.date)):
+                            doc_data[key] = val.strftime("%Y-%m-%d")
+
+                    db.collection("production_orders").add(doc_data)
+                    success_count += 1
+                    progress_bar.progress((idx + 1) / len(df))
+                
+                st.success(f"총 {success_count}건의 데이터가 저장되었습니다!")
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"엑셀 처리 중 오류가 발생했습니다: {e}")
+
+    st.divider()
+    st.subheader("📝 신규 발주 등록 (개별 입력)")
     with st.form("new_order_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        client_name = c1.text_input("발주처명")
-        product_name = c2.text_input("품명")
+        # 1열
+        c1, c2, c3, c4 = st.columns(4)
+        client_name = c1.text_input("업체명 (필수)")
+        manager = c2.text_input("발주담당자")
+        order_type = c3.selectbox("구분", ["신규", "추가", "샘플"])
+        contact = c4.text_input("연락처")
         
-        c3, c4 = st.columns(2)
-        quantity = c3.number_input("수량", min_value=1)
-        unit = c4.selectbox("단위", ["yds", "meter", "kg", "pcs"])
+        # 2열
+        c5, c6, c7, c8 = st.columns(4)
+        product_name = c5.text_input("품명 (필수)")
+        color = c6.text_input("색상")
+        spec = c7.text_input("규격")
+        yarn_type = c8.text_input("사종")
         
-        delivery_to = st.text_input("납품처 (선택사항)")
-        note = st.text_area("비고 (특이사항)")
+        # 3열
+        c9, c10, c11, c12 = st.columns(4)
+        quantity = c9.number_input("발주수량", min_value=1)
+        weight = c10.text_input("중량")
+        order_date = c11.date_input("발주일", datetime.datetime.now())
+        delivery_date = c12.date_input("납품일", datetime.datetime.now() + datetime.timedelta(days=7))
+        
+        # 4열
+        c13, c14, c15 = st.columns(3)
+        weaving = c13.text_input("제직 정보")
+        dyeing = c14.text_input("염색 정보")
+        work_site = c15.text_input("작업지")
+        
+        # 5열
+        c16, c17 = st.columns(2)
+        delivery_to = c16.text_input("운송처")
+        email_date = c17.date_input("e-mail 발송일", value=None)
+        
+        note = st.text_area("비 고")
         
         submitted = st.form_submit_button("발주 등록")
         
@@ -158,11 +243,22 @@ with tab2:
                 "client_name": client_name,
                 "product_name": product_name,
                 "quantity": quantity,
-                "unit": unit,
+                "unit": spec, # 규격을 단위로 사용
+                "order_date": order_date.strftime("%Y-%m-%d"),
+                "delivery_date": delivery_date.strftime("%Y-%m-%d"),
                 "delivery_to": delivery_to,
+                "manager": manager,
+                "order_type": order_type,
+                "work_site": work_site,
+                "weaving": weaving,
+                "dyeing": dyeing,
+                "weight": weight,
+                "yarn_type": yarn_type,
+                "color": color,
+                "contact": contact,
+                "email_sent_date": email_date.strftime("%Y-%m-%d") if email_date else "",
                 "note": note,
                 "status": "발주접수",  # 초기 상태
-                "order_date": datetime.datetime.now().strftime("%Y-%m-%d"),
                 "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             db.collection("production_orders").add(new_data)
