@@ -20,12 +20,12 @@ def get_db():
             if "FIREBASE_KEY" in st.secrets:
                 secrets_val = st.secrets["FIREBASE_KEY"]
                 try:
-                    # 1. 딕셔너리 형태(TOML 테이블)로 들어온 경우 바로 사용
-                    if isinstance(secrets_val, (dict, type(st.secrets))):
-                        key_dict = dict(secrets_val)
-                    # 2. 문자열 형태(JSON String)로 들어온 경우 파싱
-                    else:
+                    # 1. 문자열 형태(JSON String)로 들어온 경우 파싱
+                    if isinstance(secrets_val, str):
                         key_dict = json.loads(secrets_val, strict=False)
+                    # 2. 딕셔너리 형태(TOML 테이블)로 들어온 경우 바로 사용 (AttrDict 등)
+                    else:
+                        key_dict = dict(secrets_val)
                     
                     # 프로젝트 ID 검증: 실수로 옛날 키를 쓰는 경우 방지
                     if key_dict.get("project_id") == "sa-inventory":
