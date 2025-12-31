@@ -158,6 +158,16 @@ with tab2:
                 progress_bar = st.progress(0)
                 success_count = 0
                 
+                # 날짜 변환 헬퍼 함수
+                def parse_date(date_val):
+                    if pd.isna(date_val) or date_val == "":
+                        return ""
+                    try:
+                        # pandas의 강력한 날짜 파싱 기능 사용
+                        return pd.to_datetime(date_val).strftime("%Y-%m-%d")
+                    except:
+                        return str(date_val) # 파싱 실패 시 원본 유지
+
                 for idx, row in df.iterrows():
                     # 엑셀 데이터 매핑
                     # (값이 없으면 빈 문자열이나 0으로 처리)
@@ -166,8 +176,8 @@ with tab2:
                         "product_name": str(row.get("품명", "")),
                         "quantity": row.get("발주수량", 0),
                         "unit": str(row.get("규격", "yds")), # 규격을 단위로 사용
-                        "order_date": row.get("발주일", datetime.datetime.now().strftime("%Y-%m-%d")),
-                        "delivery_date": row.get("납품일", ""),
+                        "order_date": parse_date(row.get("발주일")) or datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "delivery_date": parse_date(row.get("납품일")),
                         "delivery_to": str(row.get("운송처", "")),
                         "manager": str(row.get("발주담당자", "")),
                         "order_type": str(row.get("구분(신규/추가)", "")),
@@ -178,16 +188,15 @@ with tab2:
                         "yarn_type": str(row.get("사종", "")),
                         "color": str(row.get("색상", "")),
                         "contact": str(row.get("연락처", "")),
-                        "email_sent_date": row.get("e-mail 발송일", ""),
+                        "email_sent_date": parse_date(row.get("e-mail 발송일")),
                         "note": str(row.get("비 고", "")),
                         "status": "발주접수",
                         "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
                     # 날짜 형식이 datetime 객체인 경우 문자열로 변환
-                    for key, val in doc_data.items():
-                        if isinstance(val, (datetime.datetime, datetime.date)):
-                            doc_data[key] = val.strftime("%Y-%m-%d")
+                    # (위의 parse_date 함수에서 이미 처리했으므로 중복 제거 가능하지만 안전을 위해 유지)
+                    # for key, val in doc_data.items(): ... 
 
                     db.collection("production_orders").add(doc_data)
                     success_count += 1
@@ -263,6 +272,21 @@ with tab2:
             }
             db.collection("production_orders").add(new_data)
             st.success("신규 발주가 등록되었습니다!")
+            st.rerun()
+
+    # 데이터 초기화 버튼 (위험하므로 Expander 안에 숨김)
+    st.divider()
+    with st.expander("⚠️ 데이터 관리 (초기화)"):
+        st.warning("주의: 이 버튼을 누르면 등록된 모든 발주 내역이 영구적으로 삭제됩니다.")
+        if st.button("🗑️ 기존 데이터 전체 삭제하기", type="primary"):
+            with st.spinner("데이터 삭제 중..."):
+                # 배치 삭제 (문서가 많을 경우를 대비)
+                docs = db.collection("production_orders").stream()
+                deleted_count = 0
+                for doc in docs:
+                    doc.reference.delete()
+                    deleted_count += 1
+            st.success(f"총 {deleted_count}건의 데이터가 삭제되었습니다.")
             st.rerun()
 
     st.divider()
