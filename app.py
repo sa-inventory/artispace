@@ -73,7 +73,7 @@ except Exception as e:
 PROCESS_STAGES = ["발주접수", "제직공정", "염색공정", "봉제공정", "출고완료"]
 
 # 메인 타이틀
-st.title("아티스린넨 발주내역")
+st.title("🏭 아티스린넨 공정 관리 시스템")
 st.markdown("---")
 
 # 탭 구성: 조회용(거래처) / 입력용(관리자)
@@ -83,12 +83,61 @@ tab1, tab2 = st.tabs(["🔍 진행상황 조회 (거래처용)", "🛠️ 작업
 # 탭 1: 거래처 조회 화면
 # ==========================================
 with tab1:
-    st.subheader("📦 발주 건별 진행상황")
+    st.subheader("📦 발주 등록 및 조회")
     
     # 🔒 보안: 접속 코드 확인
     access_code = st.text_input("🔒 접속 코드를 입력하세요 (거래처용)", type="password", key="access_code")
     
     if access_code == "1234":  # 👈 원하는 비밀번호로 변경하세요
+        
+        # --- 1. 신규 발주 등록 (거래처용으로 이동) ---
+        with st.expander("📝 신규 발주 등록하기", expanded=False):
+            with st.form("new_order_form_client", clear_on_submit=True):
+                st.caption("발주 내용을 입력해주세요.")
+                # 1열
+                c1, c2, c3, c4 = st.columns(4)
+                client_name = c1.text_input("업체명 (필수)")
+                product_name = c2.text_input("품명 (필수)")
+                quantity = c3.number_input("발주수량", min_value=1)
+                spec = c4.text_input("규격")
+                
+                # 2열
+                c5, c6, c7, c8 = st.columns(4)
+                color = c5.text_input("색상")
+                yarn_type = c6.text_input("사종")
+                weight = c7.text_input("중량")
+                order_type = c8.selectbox("구분", ["신규", "추가", "샘플"])
+                
+                # 3열
+                c9, c10 = st.columns(2)
+                delivery_to = c9.text_input("운송처")
+                note = c10.text_input("비고")
+                
+                submitted = st.form_submit_button("발주 등록")
+                
+                if submitted and client_name and product_name:
+                    new_data = {
+                        "client_name": client_name,
+                        "product_name": product_name,
+                        "quantity": quantity,
+                        "unit": spec,
+                        "color": color,
+                        "yarn_type": yarn_type,
+                        "weight": weight,
+                        "order_type": order_type,
+                        "delivery_to": delivery_to,
+                        "note": note,
+                        "order_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "status": "발주접수",
+                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    db.collection("production_orders").add(new_data)
+                    st.success("발주가 성공적으로 등록되었습니다.")
+                    st.rerun()
+
+        st.divider()
+        
+        # --- 2. 진행상황 조회 ---
         # 검색 기능
         col1, col2 = st.columns([3, 1])
         search_term = col1.text_input("발주처명 또는 품명을 입력하세요", placeholder="예: ABC물산")
@@ -114,19 +163,28 @@ with tab1:
                     c1.write(f"**발주처**: {item['client_name']}")
                     c2.write(f"**품명**: {item['product_name']}")
                     c3.write(f"**수량**: {item['quantity']} {item.get('unit', 'yds')}")
-                    
+
                     current_stage = item['status']
+                    
+                    # 공정 단계별 날짜 표시
+                    st.markdown(f"""
+                    | 제직공정 | 염색공정 | 봉제공정 | 출고완료 |
+                    | :---: | :---: | :---: | :---: |
+                    | {item.get('weaving_date', '-')} | {item.get('dyeing_date', '-')} | {item.get('sewing_date', '-')} | {item.get('shipping_date', '-')} |
+                    """)
+                    
+                    # Progress Bar
                     try:
                         progress_idx = PROCESS_STAGES.index(current_stage)
                         progress_val = (progress_idx + 1) / len(PROCESS_STAGES)
                     except:
                         progress_val = 0
-                    
                     c4.progress(progress_val, text=f"현재 상태: **{current_stage}**")
                     
                     with st.expander("상세 내역 보기"):
                         st.write(f"- 발주 일자: {item['order_date']}")
-                        st.write(f"- 납품 예정처: {item.get('delivery_to', '-')}")
+                        if item.get('shipping_method'):
+                            st.write(f"- 출고 정보: {item.get('shipping_method')} / {item.get('shipping_dest_name', '-')}")
                         st.write(f"- 비고: {item.get('note', '-')}")
                         st.caption(f"최종 업데이트: {item.get('last_updated', '-')}")
         else:
@@ -138,7 +196,7 @@ with tab1:
 # 탭 2: 관리자 입력 화면
 # ==========================================
 with tab2:
-    st.subheader(" 엑셀 일괄 업로드")
+    st.subheader("📤 엑셀 일괄 업로드")
     st.info("엑셀 파일의 첫 번째 줄(헤더)에 다음 항목들이 포함되어 있어야 합니다: 업체명, 품명, 발주수량, 발주일, 납품일, 규격, 색상 등")
     
     uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=['xlsx', 'xls'])
@@ -209,88 +267,7 @@ with tab2:
             st.error(f"엑셀 처리 중 오류가 발생했습니다: {e}")
 
     st.divider()
-    st.subheader("📝 신규 발주 등록 (개별 입력)")
-    with st.form("new_order_form", clear_on_submit=True):
-        # 1열
-        c1, c2, c3, c4 = st.columns(4)
-        client_name = c1.text_input("업체명 (필수)")
-        manager = c2.text_input("발주담당자")
-        order_type = c3.selectbox("구분", ["신규", "추가", "샘플"])
-        contact = c4.text_input("연락처")
-        
-        # 2열
-        c5, c6, c7, c8 = st.columns(4)
-        product_name = c5.text_input("품명 (필수)")
-        color = c6.text_input("색상")
-        spec = c7.text_input("규격")
-        yarn_type = c8.text_input("사종")
-        
-        # 3열
-        c9, c10, c11, c12 = st.columns(4)
-        quantity = c9.number_input("발주수량", min_value=1)
-        weight = c10.text_input("중량")
-        order_date = c11.date_input("발주일", datetime.datetime.now())
-        delivery_date = c12.date_input("납품일", datetime.datetime.now() + datetime.timedelta(days=7))
-        
-        # 4열
-        c13, c14, c15 = st.columns(3)
-        weaving = c13.text_input("제직 정보")
-        dyeing = c14.text_input("염색 정보")
-        work_site = c15.text_input("작업지")
-        
-        # 5열
-        c16, c17 = st.columns(2)
-        delivery_to = c16.text_input("운송처")
-        email_date = c17.date_input("e-mail 발송일", value=None)
-        
-        note = st.text_area("비 고")
-        
-        submitted = st.form_submit_button("발주 등록")
-        
-        if submitted and client_name and product_name:
-            new_data = {
-                "client_name": client_name,
-                "product_name": product_name,
-                "quantity": quantity,
-                "unit": spec, # 규격을 단위로 사용
-                "order_date": order_date.strftime("%Y-%m-%d"),
-                "delivery_date": delivery_date.strftime("%Y-%m-%d"),
-                "delivery_to": delivery_to,
-                "manager": manager,
-                "order_type": order_type,
-                "work_site": work_site,
-                "weaving": weaving,
-                "dyeing": dyeing,
-                "weight": weight,
-                "yarn_type": yarn_type,
-                "color": color,
-                "contact": contact,
-                "email_sent_date": email_date.strftime("%Y-%m-%d") if email_date else "",
-                "note": note,
-                "status": "발주접수",  # 초기 상태
-                "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            db.collection("production_orders").add(new_data)
-            st.success("신규 발주가 등록되었습니다!")
-            st.rerun()
-
-    # 데이터 초기화 버튼 (위험하므로 Expander 안에 숨김)
-    st.divider()
-    with st.expander("⚠️ 데이터 관리 (초기화)"):
-        st.warning("주의: 이 버튼을 누르면 등록된 모든 발주 내역이 영구적으로 삭제됩니다.")
-        if st.button("🗑️ 기존 데이터 전체 삭제하기", type="primary"):
-            with st.spinner("데이터 삭제 중..."):
-                # 배치 삭제 (문서가 많을 경우를 대비)
-                docs = db.collection("production_orders").stream()
-                deleted_count = 0
-                for doc in docs:
-                    doc.reference.delete()
-                    deleted_count += 1
-            st.success(f"총 {deleted_count}건의 데이터가 삭제되었습니다.")
-            st.rerun()
-
-    st.divider()
-    st.subheader(" 발주 내역 조회 및 관리")
+    st.subheader("📋 발주 내역 관리 및 공정 업데이트")
     
     # 전체 데이터 불러오기
     orders = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
@@ -302,6 +279,8 @@ with tab2:
     
     if data:
         df = pd.DataFrame(data)
+        # 선택 기능을 위해 'selected' 컬럼 추가 (기본값 False)
+        df['selected'] = False
         
         # 날짜 변환 (문자열 -> datetime64 -> 시간제거)
         # astype(str)을 추가하여 데이터가 숫자로 들어와도 안전하게 처리
@@ -381,47 +360,104 @@ with tab2:
         # 정렬: 발주일 기준 내림차순 (기본)
         filtered_df = filtered_df.sort_values(by='order_date', ascending=False)
         
-        # 컬럼명 한글 매핑 (엑셀 헤더와 동일하게 수정)
-        col_map = {
-            'status': '진행상태',
-            'email_sent_date': 'e-mail 발송일',
-            'order_type': '구분(신규/추가)',
-            'manager': '발주담당자',
-            'order_date': '발주일',
-            'delivery_date': '납품일',
-            'work_site': '작업지',
-            'client_name': '업체명',
-            'weaving': '제직',
-            'dyeing': '염색',
-            'quantity': '발주수량',
-            'unit': '규격',
-            'product_name': '품명',
-            'weight': '중량',
-            'yarn_type': '사종',
-            'color': '색상',
-            'delivery_to': '운송처',
-            'contact': '연락처',
-            'note': '비 고'
-        }
+        # --- 일괄 업데이트 UI ---
+        st.markdown("### 🛠️ 공정 단계 일괄 업데이트")
+        st.caption("아래 목록에서 업데이트할 항목을 체크(✅)하고, 적용할 날짜와 공정을 선택하세요.")
         
-        # 표시할 컬럼 순서 지정 (엑셀 파일 순서 + 진행상태)
-        display_order = [
-            'status',
-            'email_sent_date', 'order_type', 'manager', 'order_date', 'delivery_date', 'work_site',
-            'client_name', 'weaving', 'dyeing', 'quantity', 'unit', 'product_name', 'weight',
-            'yarn_type', 'color', 'delivery_to', 'contact', 'note'
-        ]
+        # 업데이트 설정 폼
+        with st.form("bulk_update_form"):
+            c1, c2, c3 = st.columns([1, 1, 1])
+            update_date = c1.date_input("적용일자", datetime.date.today())
+            target_stage = c2.selectbox("진행 공정 선택", ["제직공정", "염색공정", "봉제공정", "출고완료"])
+            
+            # 출고완료 선택 시 추가 입력창
+            shipping_method = None
+            shipping_dest = None
+            
+            # 폼 안에서는 동적 UI가 제한적이므로, 출고 관련 정보는 항상 입력받되 '출고완료'일 때만 저장하도록 처리
+            c3.markdown("**[출고 시 입력]**")
+            shipping_method = c3.selectbox("출고방법", ["-", "택배", "화물", "용차", "직배송"])
+            shipping_dest = st.text_input("출고지명 (출고 시 입력)")
+            
+            # 데이터 에디터 (체크박스 포함)
+            # 사용자가 체크할 수 있도록 설정
+            edited_df = st.data_editor(
+                filtered_df,
+                column_config={
+                    "selected": st.column_config.CheckboxColumn(
+                        "선택",
+                        help="업데이트할 항목을 선택하세요",
+                        default=False,
+                    ),
+                    "status": "진행상태",
+                    "client_name": "업체명",
+                    "product_name": "품명",
+                    "quantity": "수량",
+                    "order_date": "발주일",
+                    "weaving_date": "제직일",
+                    "dyeing_date": "염색일",
+                    "sewing_date": "봉제일",
+                    "shipping_date": "출고일",
+                },
+                disabled=["status", "client_name", "product_name", "quantity", "order_date", "weaving_date", "dyeing_date", "sewing_date", "shipping_date"], # 선택 컬럼 외에는 수정 불가
+                hide_index=True,
+                use_container_width=True,
+                key="data_editor_bulk"
+            )
+            
+            update_submitted = st.form_submit_button("선택한 항목 일괄 적용")
+            
+            if update_submitted:
+                # 선택된 행 찾기
+                selected_rows = edited_df[edited_df["selected"] == True]
+                
+                if not selected_rows.empty:
+                    count = 0
+                    update_data = {
+                        "status": target_stage,
+                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    # 공정별 날짜 필드 매핑
+                    date_str = update_date.strftime("%Y-%m-%d")
+                    if target_stage == "제직공정":
+                        update_data["weaving_date"] = date_str
+                    elif target_stage == "염색공정":
+                        update_data["dyeing_date"] = date_str
+                    elif target_stage == "봉제공정":
+                        update_data["sewing_date"] = date_str
+                    elif target_stage == "출고완료":
+                        update_data["shipping_date"] = date_str
+                        if shipping_method != "-":
+                            update_data["shipping_method"] = shipping_method
+                        if shipping_dest:
+                            update_data["shipping_dest_name"] = shipping_dest
+                    
+                    # DB 업데이트
+                    for idx, row in selected_rows.iterrows():
+                        doc_id = row['id']
+                        db.collection("production_orders").document(doc_id).update(update_data)
+                        count += 1
+                    
+                    st.success(f"✅ 총 {count}건의 상태가 '{target_stage}'(으)로 업데이트되었습니다.")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ 업데이트할 항목을 목록에서 선택(체크)해주세요.")
         
-        # 매핑 적용 및 컬럼 필터링
-        display_df = filtered_df.rename(columns=col_map)
-        
-        # 존재하는 컬럼만 선택하여 표시 (나머지 컬럼도 뒤에 붙여서 보여줌)
-        mapped_display_order = [col_map[c] for c in display_order if c in filtered_df.columns]
-        other_cols = [c for c in display_df.columns if c not in mapped_display_order and c not in ['id', 'order_date_dt']]
-        
-        final_cols = mapped_display_order + other_cols
-        
-        st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
+        # 데이터 초기화 버튼 (위험하므로 Expander 안에 숨김)
+        st.divider()
+        with st.expander("⚠️ 데이터 관리 (초기화)"):
+            st.warning("주의: 이 버튼을 누르면 등록된 모든 발주 내역이 영구적으로 삭제됩니다.")
+            if st.button("🗑️ 기존 데이터 전체 삭제하기", type="primary"):
+                with st.spinner("데이터 삭제 중..."):
+                    # 배치 삭제 (문서가 많을 경우를 대비)
+                    docs = db.collection("production_orders").stream()
+                    deleted_count = 0
+                    for doc in docs:
+                        doc.reference.delete()
+                        deleted_count += 1
+                st.success(f"총 {deleted_count}건의 데이터가 삭제되었습니다.")
+                st.rerun()
 
     else:
         st.info("등록된 데이터가 없습니다.")
