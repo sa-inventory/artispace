@@ -266,32 +266,87 @@ with tab2:
             st.rerun()
 
     st.divider()
-    st.subheader("🔄 공정 상태 업데이트")
+    st.subheader(" 발주 내역 조회 및 관리")
     
-    # 업데이트를 위한 목록 불러오기 (완료되지 않은 건 위주로)
-    # 편의상 전체 목록을 불러와서 선택하는 방식으로 구현
+    # 전체 데이터 불러오기
     orders = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
-    order_options = {doc.id: f"[{doc.to_dict().get('client_name')}] {doc.to_dict().get('product_name')} ({doc.to_dict().get('status')})" for doc in orders}
+    data = []
+    for doc in orders:
+        d = doc.to_dict()
+        d['id'] = doc.id
+        data.append(d)
     
-    if order_options:
-        selected_order_id = st.selectbox("상태를 변경할 주문을 선택하세요", options=list(order_options.keys()), format_func=lambda x: order_options[x])
+    if data:
+        df = pd.DataFrame(data)
         
-        if selected_order_id:
-            # 현재 선택된 문서의 정보 가져오기
-            doc_ref = db.collection("production_orders").document(selected_order_id)
-            doc_snap = doc_ref.get()
-            if doc_snap.exists:
-                current_data = doc_snap.to_dict()
-                st.info(f"현재 상태: **{current_data['status']}**")
-                
-                new_status = st.selectbox("변경할 상태 선택", PROCESS_STAGES, index=PROCESS_STAGES.index(current_data['status']) if current_data['status'] in PROCESS_STAGES else 0)
-                
-                if st.button("상태 변경 저장"):
-                    doc_ref.update({
-                        "status": new_status,
-                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    })
-                    st.success(f"'{new_status}' 상태로 변경되었습니다.")
-                    st.rerun()
+        # --- 검색 조건 필터 ---
+        with st.expander("🔍 상세 검색 조건 설정", expanded=True):
+            # 1. 기간 설정
+            c1, c2 = st.columns([1, 3])
+            # 날짜 변환
+            df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce')
+            min_date = df['order_date_dt'].min().date() if not df['order_date_dt'].isnull().all() else datetime.date.today()
+            max_date = df['order_date_dt'].max().date() if not df['order_date_dt'].isnull().all() else datetime.date.today()
+            
+            date_range = c1.date_input("발주 기간", [min_date, max_date])
+            
+            # 2. 다중 선택 필터 (주요 컬럼)
+            # 필터링할 컬럼 정의
+            filter_cols = {
+                "client_name": "업체명",
+                "product_name": "품명",
+                "status": "진행상태",
+                "manager": "담당자",
+                "order_type": "구분",
+                "work_site": "작업지"
+            }
+            
+            selected_filters = {}
+            cols = st.columns(3)
+            for i, (col_key, col_name) in enumerate(filter_cols.items()):
+                unique_vals = df[col_key].unique().tolist() if col_key in df.columns else []
+                # None이나 빈 값 제거
+                unique_vals = [x for x in unique_vals if x]
+                selected_filters[col_key] = cols[i % 3].multiselect(f"{col_name}", unique_vals)
+
+        # --- 필터 적용 ---
+        filtered_df = df.copy()
+        
+        # 날짜 필터 적용
+        if len(date_range) == 2:
+            start_d, end_d = date_range
+            filtered_df = filtered_df[
+                (filtered_df['order_date_dt'].dt.date >= start_d) & 
+                (filtered_df['order_date_dt'].dt.date <= end_d)
+            ]
+        
+        # 선택된 조건 표시용 텍스트
+        active_conditions = []
+        if len(date_range) == 2:
+            active_conditions.append(f"📅 기간: {date_range[0]} ~ {date_range[1]}")
+
+        # 다중 선택 필터 적용
+        for col_key, selected_vals in selected_filters.items():
+            if selected_vals:
+                filtered_df = filtered_df[filtered_df[col_key].isin(selected_vals)]
+                active_conditions.append(f"{filter_cols[col_key]}: {', '.join(selected_vals)}")
+        
+        # --- 결과 표시 ---
+        st.divider()
+        if active_conditions:
+            st.info(f"✅ 적용된 조건: {' | '.join(active_conditions)}")
+        else:
+            st.info("✅ 전체 목록 조회 중")
+            
+        st.write(f"총 **{len(filtered_df)}**건의 내역이 있습니다.")
+        
+        # 보기 좋은 컬럼 순서로 정리
+        display_cols = ['order_date', 'client_name', 'product_name', 'quantity', 'unit', 'status', 'manager', 'delivery_date', 'delivery_to', 'note']
+        # 실제 존재하는 컬럼만 선택 + 나머지 컬럼 뒤에 붙이기
+        final_cols = [c for c in display_cols if c in filtered_df.columns]
+        remaining = [c for c in filtered_df.columns if c not in final_cols and c not in ['id', 'order_date_dt']]
+        
+        st.dataframe(filtered_df[final_cols + remaining], use_container_width=True, hide_index=True)
+
     else:
-        st.write("업데이트할 주문 내역이 없습니다.")
+        st.info("등록된 데이터가 없습니다.")
