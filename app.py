@@ -18,13 +18,23 @@ def get_db():
         # 스트림릿 클라우드 배포용 (Secrets)
         try:
             if "FIREBASE_KEY" in st.secrets:
+                secrets_val = st.secrets["FIREBASE_KEY"]
                 try:
-                    key_dict = json.loads(st.secrets["FIREBASE_KEY"])
+                    # 1. 딕셔너리 형태(TOML 테이블)로 들어온 경우 바로 사용
+                    if isinstance(secrets_val, (dict, type(st.secrets))):
+                        key_dict = dict(secrets_val)
+                    # 2. 문자열 형태(JSON String)로 들어온 경우 파싱
+                    else:
+                        key_dict = json.loads(secrets_val, strict=False)
                     
                     # 프로젝트 ID 검증: 실수로 옛날 키를 쓰는 경우 방지
                     if key_dict.get("project_id") == "sa-inventory":
                         st.error("🚨 잘못된 키 감지: 현재 'sa-inventory'(옛날 프로젝트) 키가 설정되어 있습니다. 'artispace' 키를 사용해주세요.")
-                        
+                    
+                    # private_key 줄바꿈 문자(\n) 처리 (매우 중요)
+                    if "private_key" in key_dict:
+                        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+
                     cred = credentials.Certificate(key_dict)
                 except Exception as e:
                     st.error(f"Secrets 설정 오류: {e} (키 값을 복사할 때 형식이 깨졌을 수 있습니다)")
