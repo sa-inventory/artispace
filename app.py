@@ -49,7 +49,7 @@ except Exception as e:
     st.stop()
 
 # 4. 공통 함수: 데이터 로드
-@st.cache_data(ttl=5)  # 5초 동안 데이터를 캐시하여 로딩 속도 개선 (흐릿함 감소)
+@st.cache_data  # TTL 제거: 데이터가 변경될 때만 수동으로 초기화하여 속도 극대화
 def load_data():
     try:
         db = get_db()
@@ -103,12 +103,21 @@ def menu_button(label, page_name):
 
 if st.session_state.auth_role == "admin":
     # 관리자용: 업무 모드 선택으로 그룹핑 효과
+    if 'admin_mode' not in st.session_state:
+        st.session_state.admin_mode = "client" # 기본값
+
     st.sidebar.header("업무 모드")
-    mode = st.sidebar.radio("모드 선택", ["👤 거래처 모드", "🛠️ 관리자 모드"], label_visibility="collapsed")
+    c_m1, c_m2 = st.sidebar.columns(2)
+    if c_m1.button("👤 거래처", use_container_width=True, type="primary" if st.session_state.admin_mode == "client" else "secondary"):
+        st.session_state.admin_mode = "client"
+        st.rerun()
+    if c_m2.button("🛠️ 관리자", use_container_width=True, type="primary" if st.session_state.admin_mode == "admin" else "secondary"):
+        st.session_state.admin_mode = "admin"
+        st.rerun()
     
     st.sidebar.divider()
     
-    if mode == "👤 거래처 모드":
+    if st.session_state.admin_mode == "client":
         st.sidebar.subheader("거래처 기능")
         menu_button("📝 신규 발주 등록", "신규 발주 등록")
         menu_button("🔍 진행상황 조회", "진행상황 조회")
@@ -125,6 +134,7 @@ else:
 st.sidebar.divider()
 if st.sidebar.button("로그아웃"):
     st.session_state.auth_role = None
+    st.session_state.admin_mode = "client"
     st.session_state.current_page = None
     st.rerun()
 
@@ -182,6 +192,7 @@ if st.session_state.current_page == "신규 발주 등록":
                     "status": "발주접수", "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 db.collection("production_orders").add(new_doc)
+                load_data.clear()  # 데이터 변경 시 캐시 초기화
                 st.success("등록되었습니다.")
                 st.rerun()
             else:
@@ -324,6 +335,7 @@ elif st.session_state.current_page == "발주 관리":
                         # ID로 업데이트
                         db.collection("production_orders").document(row['id']).update(upd_data)
                         cnt += 1
+                    load_data.clear()  # 데이터 변경 시 캐시 초기화
                     st.success(f"{cnt}건 처리 완료")
                     st.rerun()
                 else:
@@ -344,6 +356,7 @@ elif st.session_state.current_page == "발주 관리":
                 if st.button("모든 데이터 삭제", type="primary"):
                     all_docs = db.collection("production_orders").stream()
                     for d in all_docs: d.reference.delete()
+                    load_data.clear()  # 데이터 변경 시 캐시 초기화
                     st.success("삭제됨")
                     st.rerun()
 
@@ -382,5 +395,6 @@ elif st.session_state.current_page == "엑셀 업로드":
                 }
                 db.collection("production_orders").add(doc)
                 bar.progress((i+1)/len(df_up))
+            load_data.clear()  # 데이터 변경 시 캐시 초기화
             st.success("업로드 완료!")
             st.rerun()
