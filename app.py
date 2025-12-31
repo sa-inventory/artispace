@@ -279,20 +279,18 @@ with tab2:
     if data:
         df = pd.DataFrame(data)
         
-        # 날짜 변환 (비교를 위해 datetime64 객체로 변환 및 시간 제거)
-        # dt.normalize()를 사용하여 시간 정보를 00:00:00으로 통일 (비교 오류 및 데이터 누락 방지)
-        df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce').dt.normalize()
+        # 날짜 변환 (문자열 -> datetime64 -> 시간제거)
+        # astype(str)을 추가하여 데이터가 숫자로 들어와도 안전하게 처리
+        df['order_date_dt'] = pd.to_datetime(df['order_date'].astype(str), errors='coerce').dt.normalize()
         
-        # date_input을 위한 min/max 계산 (NaT 처리)
-        min_ts = df['order_date_dt'].min()
-        max_ts = df['order_date_dt'].max()
-        
-        min_date = min_ts.date() if pd.notnull(min_ts) else datetime.date.today()
-        max_date = max_ts.date() if pd.notnull(max_ts) else datetime.date.today()
+        # 초기 기간 설정 (최근 3개월)
+        today = datetime.date.today()
+        three_months_ago = today - datetime.timedelta(days=90)
         
         # 1. 상시 표시 필터 (기간, 진행상태)
         c1, c2 = st.columns([1, 2])
-        date_range = c1.date_input("발주기간", [min_date, max_date], key="filter_date")
+        # min_value, max_value 제한을 없애서 선택 시 초기화되는 문제 해결
+        date_range = c1.date_input("발주기간", [three_months_ago, today], key="filter_date")
         
         status_options = df['status'].unique().tolist() if 'status' in df.columns else []
         status_options = [x for x in status_options if x]
