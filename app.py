@@ -169,13 +169,17 @@ with tab1:
         query = orders_ref.order_by("order_date", direction=firestore.Query.DESCENDING)
         
         # 검색어가 있으면 필터링
-        docs = query.stream()
         data_list = []
-        for doc in docs:
-            d = doc.to_dict()
-            d['id'] = doc.id
-            if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
-                data_list.append(d)
+        try:
+            docs = query.stream()
+            for doc in docs:
+                d = doc.to_dict()
+                d['id'] = doc.id
+                if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
+                    data_list.append(d)
+        except Exception as e:
+            st.warning("⚠️ 데이터베이스 연결이 지연되고 있습니다. 잠시 후 다시 시도하거나 앱을 재부팅(Reboot)해주세요.")
+            # print(e) # 로그 확인용
 
         if data_list:
             # 데이터프레임 변환
