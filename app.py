@@ -85,52 +85,54 @@ tab1, tab2 = st.tabs(["🔍 진행상황 조회 (거래처용)", "🛠️ 작업
 with tab1:
     st.subheader("📦 발주 건별 진행상황")
     
-    # 검색 기능
-    col1, col2 = st.columns([3, 1])
-    search_term = col1.text_input("발주처명 또는 품명을 입력하세요", placeholder="예: ABC물산")
-    search_btn = col2.button("조회하기")
-
-    # 데이터 가져오기
-    orders_ref = db.collection("production_orders")
-    query = orders_ref.order_by("order_date", direction=firestore.Query.DESCENDING)
+    # 🔒 보안: 접속 코드 확인
+    access_code = st.text_input("🔒 접속 코드를 입력하세요 (거래처용)", type="password", key="access_code")
     
-    # 검색어가 있으면 필터링 (간단한 클라이언트 사이드 필터링)
-    docs = query.stream()
-    data_list = []
-    for doc in docs:
-        d = doc.to_dict()
-        d['id'] = doc.id
-        # 검색어가 없거나, 검색어가 발주처명/품명에 포함되면 추가
-        if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
-            data_list.append(d)
+    if access_code == "1234":  # 👈 원하는 비밀번호로 변경하세요
+        # 검색 기능
+        col1, col2 = st.columns([3, 1])
+        search_term = col1.text_input("발주처명 또는 품명을 입력하세요", placeholder="예: ABC물산")
+        search_btn = col2.button("조회하기")
 
-    if data_list:
-        # 보기 좋게 카드 형태로 출력
-        for item in data_list:
-            with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([2, 2, 2, 3])
-                c1.write(f"**발주처**: {item['client_name']}")
-                c2.write(f"**품명**: {item['product_name']}")
-                c3.write(f"**수량**: {item['quantity']} {item.get('unit', 'yds')}")
-                
-                # 진행상태 시각화 (Progress Bar)
-                current_stage = item['status']
-                try:
-                    progress_idx = PROCESS_STAGES.index(current_stage)
-                    progress_val = (progress_idx + 1) / len(PROCESS_STAGES)
-                except:
-                    progress_val = 0
-                
-                c4.progress(progress_val, text=f"현재 상태: **{current_stage}**")
-                
-                # 상세 정보 (접기/펴기)
-                with st.expander("상세 내역 보기"):
-                    st.write(f"- 발주 일자: {item['order_date']}")
-                    st.write(f"- 납품 예정처: {item.get('delivery_to', '-')}")
-                    st.write(f"- 비고: {item.get('note', '-')}")
-                    st.caption(f"최종 업데이트: {item.get('last_updated', '-')}")
+        # 데이터 가져오기
+        orders_ref = db.collection("production_orders")
+        query = orders_ref.order_by("order_date", direction=firestore.Query.DESCENDING)
+        
+        # 검색어가 있으면 필터링
+        docs = query.stream()
+        data_list = []
+        for doc in docs:
+            d = doc.to_dict()
+            d['id'] = doc.id
+            if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
+                data_list.append(d)
+
+        if data_list:
+            for item in data_list:
+                with st.container(border=True):
+                    c1, c2, c3, c4 = st.columns([2, 2, 2, 3])
+                    c1.write(f"**발주처**: {item['client_name']}")
+                    c2.write(f"**품명**: {item['product_name']}")
+                    c3.write(f"**수량**: {item['quantity']} {item.get('unit', 'yds')}")
+                    
+                    current_stage = item['status']
+                    try:
+                        progress_idx = PROCESS_STAGES.index(current_stage)
+                        progress_val = (progress_idx + 1) / len(PROCESS_STAGES)
+                    except:
+                        progress_val = 0
+                    
+                    c4.progress(progress_val, text=f"현재 상태: **{current_stage}**")
+                    
+                    with st.expander("상세 내역 보기"):
+                        st.write(f"- 발주 일자: {item['order_date']}")
+                        st.write(f"- 납품 예정처: {item.get('delivery_to', '-')}")
+                        st.write(f"- 비고: {item.get('note', '-')}")
+                        st.caption(f"최종 업데이트: {item.get('last_updated', '-')}")
+        else:
+            st.info("조회된 내역이 없습니다.")
     else:
-        st.info("조회된 내역이 없습니다.")
+        st.info("🔒 내역을 조회하려면 접속 코드를 입력해주세요. (초기 비밀번호: 1234)")
 
 # ==========================================
 # 탭 2: 관리자 입력 화면
@@ -197,3 +199,20 @@ with tab2:
                     st.rerun()
     else:
         st.write("업데이트할 주문 내역이 없습니다.")
+        
+    # 🧪 테스트용 샘플 데이터 생성 버튼
+    st.divider()
+    if st.button("🎲 테스트용 샘플 데이터 생성하기"):
+        sample_data = [
+            {"client_name": "ABC물산", "product_name": "고급 린넨 A타입", "quantity": 500, "unit": "yds", "status": "제직공정", "delivery_to": "서울 물류센터", "note": "긴급 발주"},
+            {"client_name": "XYZ패션", "product_name": "S/S 셔츠 원단", "quantity": 1200, "unit": "meter", "status": "염색공정", "delivery_to": "부산 공장", "note": "색상 확인 요망"},
+            {"client_name": "대한어패럴", "product_name": "F/W 자켓용", "quantity": 300, "unit": "kg", "status": "발주접수", "delivery_to": "인천 창고", "note": ""}
+        ]
+        
+        for data in sample_data:
+            data["order_date"] = datetime.datetime.now().strftime("%Y-%m-%d")
+            data["last_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            db.collection("production_orders").add(data)
+            
+        st.success("샘플 데이터 3건이 생성되었습니다! '진행상황 조회' 탭에서 확인해보세요.")
+        st.rerun()
