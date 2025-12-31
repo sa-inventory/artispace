@@ -401,6 +401,32 @@ with tab2:
         st.markdown("### 🛠️ 공정 단계 일괄 업데이트")
         st.caption("아래 목록에서 업데이트할 항목을 체크(✅)하고, 적용할 날짜와 공정을 선택하세요.")
         
+        # 데이터 에디터 (체크박스 포함) - 폼 밖으로 이동하여 안정성 확보
+        edited_df = st.data_editor(
+            display_df[final_cols],
+            column_config={
+                "선택": st.column_config.CheckboxColumn(
+                    "선택",
+                    help="업데이트할 항목을 선택하세요",
+                    default=False,
+                    width="small"
+                ),
+                "발주일": st.column_config.DateColumn("발주일", format="YYYY-MM-DD"),
+                "납품일": st.column_config.DateColumn("납품일", format="YYYY-MM-DD"),
+                "e-mail 발송일": st.column_config.DateColumn("e-mail 발송일", format="YYYY-MM-DD"),
+                "제직일": st.column_config.DateColumn("제직일", format="YYYY-MM-DD"),
+                "염색일": st.column_config.DateColumn("염색일", format="YYYY-MM-DD"),
+                "봉제일": st.column_config.DateColumn("봉제일", format="YYYY-MM-DD"),
+                "출고일": st.column_config.DateColumn("출고일", format="YYYY-MM-DD"),
+                "발주수량": st.column_config.NumberColumn("발주수량", format="%d"),
+            },
+            # 선택 컬럼 외에는 수정 불가 (나머지 컬럼들은 모두 disabled 리스트에 추가)
+            disabled=[c for c in final_cols if c != "선택"],
+            hide_index=True,
+            use_container_width=True,
+            key="data_editor_bulk"
+        )
+
         # 업데이트 설정 폼
         with st.form("bulk_update_form"):
             c1, c2, c3 = st.columns([1, 1, 1])
@@ -415,33 +441,6 @@ with tab2:
             c3.markdown("**[출고 시 입력]**")
             shipping_method = c3.selectbox("출고방법", ["-", "택배", "화물", "용차", "직배송"])
             shipping_dest = st.text_input("출고지명 (출고 시 입력)")
-            
-            # 데이터 에디터 (체크박스 포함)
-            # 사용자가 체크할 수 있도록 설정
-            edited_df = st.data_editor(
-                display_df[final_cols],
-                column_config={
-                    "선택": st.column_config.CheckboxColumn(
-                        "선택",
-                        help="업데이트할 항목을 선택하세요",
-                        default=False,
-                        width="small"
-                    ),
-                    "발주일": st.column_config.DateColumn("발주일", format="YYYY-MM-DD"),
-                    "납품일": st.column_config.DateColumn("납품일", format="YYYY-MM-DD"),
-                    "e-mail 발송일": st.column_config.DateColumn("e-mail 발송일", format="YYYY-MM-DD"),
-                    "제직일": st.column_config.DateColumn("제직일", format="YYYY-MM-DD"),
-                    "염색일": st.column_config.DateColumn("염색일", format="YYYY-MM-DD"),
-                    "봉제일": st.column_config.DateColumn("봉제일", format="YYYY-MM-DD"),
-                    "출고일": st.column_config.DateColumn("출고일", format="YYYY-MM-DD"),
-                    "발주수량": st.column_config.NumberColumn("발주수량", format="%d"),
-                },
-                # 선택 컬럼 외에는 수정 불가 (나머지 컬럼들은 모두 disabled 리스트에 추가)
-                disabled=[c for c in final_cols if c != "선택"],
-                hide_index=True,
-                use_container_width=True,
-                key="data_editor_bulk"
-            )
             
             update_submitted = st.form_submit_button("선택한 항목 일괄 적용")
             
