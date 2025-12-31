@@ -20,9 +20,14 @@ def get_db():
             if "FIREBASE_KEY" in st.secrets:
                 try:
                     key_dict = json.loads(st.secrets["FIREBASE_KEY"])
+                    
+                    # 프로젝트 ID 검증: 실수로 옛날 키를 쓰는 경우 방지
+                    if key_dict.get("project_id") == "sa-inventory":
+                        st.error("🚨 잘못된 키 감지: 현재 'sa-inventory'(옛날 프로젝트) 키가 설정되어 있습니다. 'artispace' 키를 사용해주세요.")
+                        
                     cred = credentials.Certificate(key_dict)
                 except Exception as e:
-                    st.error(f"Secrets 키 로드 실패: {e}")
+                    st.error(f"Secrets 설정 오류: {e} (키 값을 복사할 때 형식이 깨졌을 수 있습니다)")
         except Exception:
             # 로컬 환경에서 secrets.toml 파일이 없으면 무시하고 파일 인증으로 넘어감
             pass
