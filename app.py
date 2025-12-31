@@ -279,35 +279,37 @@ with tab2:
     if data:
         df = pd.DataFrame(data)
         
-        # --- 검색 조건 필터 ---
-        with st.expander("🔍 상세 검색 조건 설정", expanded=True):
-            # 1. 기간 설정
-            c1, c2 = st.columns([1, 3])
-            # 날짜 변환
-            df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce')
-            min_date = df['order_date_dt'].min().date() if not df['order_date_dt'].isnull().all() else datetime.date.today()
-            max_date = df['order_date_dt'].max().date() if not df['order_date_dt'].isnull().all() else datetime.date.today()
-            
-            date_range = c1.date_input("발주 기간", [min_date, max_date])
-            
-            # 2. 다중 선택 필터 (주요 컬럼)
-            # 필터링할 컬럼 정의
+        # 날짜 변환 (비교를 위해 date 객체로 변환)
+        df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce')
+        df['order_date_date'] = df['order_date_dt'].dt.date
+        
+        min_date = df['order_date_date'].min() if not df['order_date_date'].isnull().all() else datetime.date.today()
+        max_date = df['order_date_date'].max() if not df['order_date_date'].isnull().all() else datetime.date.today()
+        
+        # 1. 상시 표시 필터 (기간, 진행상태)
+        c1, c2 = st.columns([1, 2])
+        date_range = c1.date_input("발주기간", [min_date, max_date], key="filter_date")
+        
+        status_options = df['status'].unique().tolist() if 'status' in df.columns else []
+        status_options = [x for x in status_options if x]
+        selected_status = c2.multiselect("진행상태", status_options, key="filter_status")
+
+        # 2. 상세 검색 조건 (Expander)
+        with st.expander("➕ 상세 검색 조건 설정"):
             filter_cols = {
                 "client_name": "업체명",
                 "product_name": "품명",
-                "status": "진행상태",
                 "manager": "담당자",
                 "order_type": "구분",
                 "work_site": "작업지"
             }
-            
             selected_filters = {}
             cols = st.columns(3)
             for i, (col_key, col_name) in enumerate(filter_cols.items()):
                 unique_vals = df[col_key].unique().tolist() if col_key in df.columns else []
-                # None이나 빈 값 제거
                 unique_vals = [x for x in unique_vals if x]
-                selected_filters[col_key] = cols[i % 3].multiselect(f"{col_name}", unique_vals)
+                # key를 지정하여 리셋 문제 해결
+                selected_filters[col_key] = cols[i % 3].multiselect(f"{col_name}", unique_vals, key=f"filter_{col_key}")
 
         # --- 필터 적용 ---
         filtered_df = df.copy()
@@ -315,19 +317,22 @@ with tab2:
         # 날짜 필터 적용
         if len(date_range) == 2:
             start_d, end_d = date_range
-            # datetime.date 객체와 datetime64 시리즈 비교 시 발생하는 TypeError 해결을 위해 Timestamp로 변환
-            start_ts = pd.Timestamp(start_d)
-            end_ts = pd.Timestamp(end_d)
-            
+            # date 객체끼리 비교하여 오류 방지
             filtered_df = filtered_df[
-                (filtered_df['order_date_dt'] >= start_ts) & 
-                (filtered_df['order_date_dt'] <= end_ts)
+                (filtered_df['order_date_date'] >= start_d) & 
+                (filtered_df['order_date_date'] <= end_d)
             ]
         
+        # 진행상태 필터 적용
+        if selected_status:
+            filtered_df = filtered_df[filtered_df['status'].isin(selected_status)]
+
         # 선택된 조건 표시용 텍스트
         active_conditions = []
         if len(date_range) == 2:
             active_conditions.append(f"📅 기간: {date_range[0]} ~ {date_range[1]}")
+        if selected_status:
+            active_conditions.append(f"진행상태: {', '.join(selected_status)}")
 
         # 다중 선택 필터 적용
         for col_key, selected_vals in selected_filters.items():
@@ -344,13 +349,48 @@ with tab2:
             
         st.write(f"총 **{len(filtered_df)}**건의 내역이 있습니다.")
         
-        # 보기 좋은 컬럼 순서로 정리
-        display_cols = ['order_date', 'client_name', 'product_name', 'quantity', 'unit', 'status', 'manager', 'delivery_date', 'delivery_to', 'note']
-        # 실제 존재하는 컬럼만 선택 + 나머지 컬럼 뒤에 붙이기
-        final_cols = [c for c in display_cols if c in filtered_df.columns]
-        remaining = [c for c in filtered_df.columns if c not in final_cols and c not in ['id', 'order_date_dt']]
+        # 정렬: 발주일 기준 내림차순 (기본)
+        filtered_df = filtered_df.sort_values(by='order_date', ascending=False)
         
-        st.dataframe(filtered_df[final_cols + remaining], use_container_width=True, hide_index=True)
+        # 컬럼명 한글 매핑
+        col_map = {
+            'order_date': '발주일',
+            'client_name': '업체명',
+            'product_name': '품명',
+            'quantity': '수량',
+            'unit': '규격',
+            'status': '진행상태',
+            'manager': '담당자',
+            'delivery_date': '납품일',
+            'delivery_to': '운송처',
+            'note': '비고',
+            'order_type': '구분',
+            'work_site': '작업지',
+            'weaving': '제직',
+            'dyeing': '염색',
+            'weight': '중량',
+            'yarn_type': '사종',
+            'color': '색상',
+            'contact': '연락처',
+            'email_sent_date': '이메일발송일'
+        }
+        
+        # 표시할 컬럼 순서 지정 (중요한 것 먼저)
+        display_order = [
+            'order_date', 'client_name', 'product_name', 'quantity', 'unit', 'status', 
+            'manager', 'delivery_date', 'delivery_to', 'work_site', 'order_type', 'note'
+        ]
+        
+        # 매핑 적용 및 컬럼 필터링
+        display_df = filtered_df.rename(columns=col_map)
+        
+        # 존재하는 컬럼만 선택하여 표시 (나머지 컬럼도 뒤에 붙여서 보여줌)
+        mapped_display_order = [col_map[c] for c in display_order if c in filtered_df.columns]
+        other_cols = [c for c in display_df.columns if c not in mapped_display_order and c not in ['id', 'order_date_dt', 'order_date_date']]
+        
+        final_cols = mapped_display_order + other_cols
+        
+        st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
 
     else:
         st.info("등록된 데이터가 없습니다.")
