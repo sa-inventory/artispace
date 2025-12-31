@@ -97,21 +97,35 @@ with tab1:
                 # 1열
                 c1, c2, c3, c4 = st.columns(4)
                 client_name = c1.text_input("업체명 (필수)")
-                product_name = c2.text_input("품명 (필수)")
-                quantity = c3.number_input("발주수량", min_value=1)
-                spec = c4.text_input("규격")
+                manager = c2.text_input("발주담당자")
+                order_type = c3.selectbox("구분", ["신규", "추가", "샘플"])
+                contact = c4.text_input("연락처")
                 
                 # 2열
                 c5, c6, c7, c8 = st.columns(4)
-                color = c5.text_input("색상")
-                yarn_type = c6.text_input("사종")
-                weight = c7.text_input("중량")
-                order_type = c8.selectbox("구분", ["신규", "추가", "샘플"])
+                product_name = c5.text_input("품명 (필수)")
+                color = c6.text_input("색상")
+                spec = c7.text_input("규격")
+                yarn_type = c8.text_input("사종")
                 
                 # 3열
-                c9, c10 = st.columns(2)
-                delivery_to = c9.text_input("운송처")
-                note = c10.text_input("비고")
+                c9, c10, c11, c12 = st.columns(4)
+                quantity = c9.number_input("발주수량", min_value=0, step=10)
+                weight = c10.text_input("중량 (숫자만 입력)", help="10단위 입력 권장") # 텍스트로 입력받거나 number_input 사용
+                order_date = c11.date_input("발주일", datetime.datetime.now())
+                delivery_date = c12.date_input("납품일", datetime.datetime.now() + datetime.timedelta(days=7))
+                
+                # 4열
+                c13, c14, c15 = st.columns(3)
+                weaving = c13.text_input("제직 정보")
+                dyeing = c14.text_input("염색 정보")
+                work_site = c15.text_input("작업지")
+                
+                # 5열
+                c16, c17, c18 = st.columns(3)
+                delivery_to = c16.text_input("운송처")
+                email_date = c17.date_input("e-mail 발송일", value=None)
+                note = c18.text_input("비고")
                 
                 submitted = st.form_submit_button("발주 등록")
                 
@@ -125,9 +139,16 @@ with tab1:
                         "yarn_type": yarn_type,
                         "weight": weight,
                         "order_type": order_type,
+                        "manager": manager,
+                        "contact": contact,
+                        "weaving": weaving,
+                        "dyeing": dyeing,
+                        "work_site": work_site,
                         "delivery_to": delivery_to,
+                        "email_sent_date": email_date.strftime("%Y-%m-%d") if email_date else "",
                         "note": note,
-                        "order_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "order_date": order_date.strftime("%Y-%m-%d"),
+                        "delivery_date": delivery_date.strftime("%Y-%m-%d"),
                         "status": "발주접수",
                         "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
@@ -157,36 +178,50 @@ with tab1:
                 data_list.append(d)
 
         if data_list:
-            for item in data_list:
-                with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 3])
-                    c1.write(f"**발주처**: {item['client_name']}")
-                    c2.write(f"**품명**: {item['product_name']}")
-                    c3.write(f"**수량**: {item['quantity']} {item.get('unit', 'yds')}")
-
-                    current_stage = item['status']
-                    
-                    # 공정 단계별 날짜 표시
-                    st.markdown(f"""
-                    | 제직공정 | 염색공정 | 봉제공정 | 출고완료 |
-                    | :---: | :---: | :---: | :---: |
-                    | {item.get('weaving_date', '-')} | {item.get('dyeing_date', '-')} | {item.get('sewing_date', '-')} | {item.get('shipping_date', '-')} |
-                    """)
-                    
-                    # Progress Bar
-                    try:
-                        progress_idx = PROCESS_STAGES.index(current_stage)
-                        progress_val = (progress_idx + 1) / len(PROCESS_STAGES)
-                    except:
-                        progress_val = 0
-                    c4.progress(progress_val, text=f"현재 상태: **{current_stage}**")
-                    
-                    with st.expander("상세 내역 보기"):
-                        st.write(f"- 발주 일자: {item['order_date']}")
-                        if item.get('shipping_method'):
-                            st.write(f"- 출고 정보: {item.get('shipping_method')} / {item.get('shipping_dest_name', '-')}")
-                        st.write(f"- 비고: {item.get('note', '-')}")
-                        st.caption(f"최종 업데이트: {item.get('last_updated', '-')}")
+            # 데이터프레임 변환
+            client_df = pd.DataFrame(data_list)
+            
+            # 컬럼 매핑 및 순서 정의 (거래처용)
+            client_col_map = {
+                'status': '진행상태',
+                'order_date': '발주일',
+                'client_name': '업체명',
+                'product_name': '품명',
+                'quantity': '수량',
+                'unit': '규격',
+                'color': '색상',
+                'weaving_date': '제직일',
+                'dyeing_date': '염색일',
+                'sewing_date': '봉제일',
+                'shipping_date': '출고일',
+                'shipping_method': '출고방법',
+                'shipping_dest_name': '출고지',
+                'delivery_date': '납품요청일',
+                'note': '비고'
+            }
+            
+            # 표시할 컬럼만 선택 및 정렬
+            display_cols = [c for c in client_col_map.keys() if c in client_df.columns]
+            client_display_df = client_df[display_cols].rename(columns=client_col_map)
+            
+            # 빈 값 처리
+            client_display_df = client_display_df.fillna("")
+            
+            st.dataframe(
+                client_display_df, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "진행상태": st.column_config.TextColumn("진행상태", width="medium"),
+                    "발주일": st.column_config.DateColumn("발주일", format="YYYY-MM-DD"),
+                    "납품요청일": st.column_config.DateColumn("납품요청일", format="YYYY-MM-DD"),
+                    "제직일": st.column_config.DateColumn("제직일", format="YYYY-MM-DD"),
+                    "염색일": st.column_config.DateColumn("염색일", format="YYYY-MM-DD"),
+                    "봉제일": st.column_config.DateColumn("봉제일", format="YYYY-MM-DD"),
+                    "출고일": st.column_config.DateColumn("출고일", format="YYYY-MM-DD"),
+                    "수량": st.column_config.NumberColumn("수량", format="%d"),
+                }
+            )
         else:
             st.info("조회된 내역이 없습니다.")
     else:
@@ -280,7 +315,9 @@ with tab2:
     if data:
         df = pd.DataFrame(data)
         # 선택 기능을 위해 'selected' 컬럼 추가 (기본값 False)
-        df['selected'] = False
+        # 맨 앞에 삽입하기 위해 insert 사용
+        if 'selected' not in df.columns:
+            df.insert(0, 'selected', False)
         
         # 날짜 변환 (문자열 -> datetime64 -> 시간제거)
         # astype(str)을 추가하여 데이터가 숫자로 들어와도 안전하게 처리
@@ -382,24 +419,25 @@ with tab2:
             # 데이터 에디터 (체크박스 포함)
             # 사용자가 체크할 수 있도록 설정
             edited_df = st.data_editor(
-                filtered_df,
+                display_df[final_cols],
                 column_config={
-                    "selected": st.column_config.CheckboxColumn(
+                    "선택": st.column_config.CheckboxColumn(
                         "선택",
                         help="업데이트할 항목을 선택하세요",
                         default=False,
+                        width="small"
                     ),
-                    "status": "진행상태",
-                    "client_name": "업체명",
-                    "product_name": "품명",
-                    "quantity": "수량",
-                    "order_date": "발주일",
-                    "weaving_date": "제직일",
-                    "dyeing_date": "염색일",
-                    "sewing_date": "봉제일",
-                    "shipping_date": "출고일",
+                    "발주일": st.column_config.DateColumn("발주일", format="YYYY-MM-DD"),
+                    "납품일": st.column_config.DateColumn("납품일", format="YYYY-MM-DD"),
+                    "e-mail 발송일": st.column_config.DateColumn("e-mail 발송일", format="YYYY-MM-DD"),
+                    "제직일": st.column_config.DateColumn("제직일", format="YYYY-MM-DD"),
+                    "염색일": st.column_config.DateColumn("염색일", format="YYYY-MM-DD"),
+                    "봉제일": st.column_config.DateColumn("봉제일", format="YYYY-MM-DD"),
+                    "출고일": st.column_config.DateColumn("출고일", format="YYYY-MM-DD"),
+                    "발주수량": st.column_config.NumberColumn("발주수량", format="%d"),
                 },
-                disabled=["status", "client_name", "product_name", "quantity", "order_date", "weaving_date", "dyeing_date", "sewing_date", "shipping_date"], # 선택 컬럼 외에는 수정 불가
+                # 선택 컬럼 외에는 수정 불가 (나머지 컬럼들은 모두 disabled 리스트에 추가)
+                disabled=[c for c in final_cols if c != "선택"],
                 hide_index=True,
                 use_container_width=True,
                 key="data_editor_bulk"
@@ -409,7 +447,8 @@ with tab2:
             
             if update_submitted:
                 # 선택된 행 찾기
-                selected_rows = edited_df[edited_df["selected"] == True]
+                # 한글 컬럼명 '선택'으로 필터링
+                selected_rows = edited_df[edited_df["선택"] == True]
                 
                 if not selected_rows.empty:
                     count = 0
@@ -435,8 +474,11 @@ with tab2:
                     
                     # DB 업데이트
                     for idx, row in selected_rows.iterrows():
-                        doc_id = row['id']
-                        db.collection("production_orders").document(doc_id).update(update_data)
+                        # 원본 데이터프레임(filtered_df)에서 ID를 찾아야 함
+                        # 현재 row는 display_df의 행이므로 인덱스가 일치한다고 가정하거나 매핑 필요
+                        # display_df는 filtered_df를 가공한 것이므로 인덱스가 동일함 (reset_index 안함)
+                        original_id = filtered_df.iloc[idx]['id']
+                        db.collection("production_orders").document(original_id).update(update_data)
                         count += 1
                     
                     st.success(f"✅ 총 {count}건의 상태가 '{target_stage}'(으)로 업데이트되었습니다.")
