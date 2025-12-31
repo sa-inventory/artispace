@@ -169,13 +169,16 @@ with tab1:
         query = orders_ref.order_by("order_date", direction=firestore.Query.DESCENDING)
         
         # 검색어가 있으면 필터링
-        docs = query.stream()
         data_list = []
-        for doc in docs:
-            d = doc.to_dict()
-            d['id'] = doc.id
-            if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
-                data_list.append(d)
+        try:
+            docs = query.stream()
+            for doc in docs:
+                d = doc.to_dict()
+                d['id'] = doc.id
+                if not search_term or (search_term in d.get('client_name', '')) or (search_term in d.get('product_name', '')):
+                    data_list.append(d)
+        except Exception:
+            st.warning("⚠️ 데이터베이스 연결이 지연되고 있습니다. 잠시 후 다시 조회해주세요.")
 
         if data_list:
             # 데이터프레임 변환
@@ -305,12 +308,15 @@ with tab2:
     st.subheader("📋 발주 내역 관리 및 공정 업데이트")
     
     # 전체 데이터 불러오기
-    orders = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
     data = []
-    for doc in orders:
-        d = doc.to_dict()
-        d['id'] = doc.id
-        data.append(d)
+    try:
+        orders = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
+        for doc in orders:
+            d = doc.to_dict()
+            d['id'] = doc.id
+            data.append(d)
+    except Exception:
+        st.warning("⚠️ 데이터베이스 연결이 지연되고 있습니다. 잠시 후 다시 시도해주세요.")
     
     if data:
         df = pd.DataFrame(data)
