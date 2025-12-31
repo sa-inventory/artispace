@@ -49,8 +49,10 @@ except Exception as e:
     st.stop()
 
 # 4. 공통 함수: 데이터 로드
+@st.cache_data(ttl=5)  # 5초 동안 데이터를 캐시하여 로딩 속도 개선 (흐릿함 감소)
 def load_data():
     try:
+        db = get_db()
         docs = db.collection("production_orders").order_by("order_date", direction=firestore.Query.DESCENDING).stream()
         data = [{"id": d.id, **d.to_dict()} for d in docs]
         return pd.DataFrame(data)
@@ -63,17 +65,23 @@ if 'auth_role' not in st.session_state:
 
 if st.session_state.auth_role is None:
     st.title("🏭 발주현황 조회 시스템")
-    c1, c2, c3 = st.columns([1, 2, 1])
+    st.markdown("<br><br>", unsafe_allow_html=True)  # 상단 여백 추가
+    
+    # 화면 중앙 정렬을 위한 컬럼 비율 조정 (좌우 여백을 넓게)
+    c1, c2, c3 = st.columns([3, 2, 3])
     with c2:
         with st.form("login_form"):
-            st.subheader("로그인")
+            st.markdown("<h3 style='text-align: center;'>로그인</h3>", unsafe_allow_html=True)
             code = st.text_input("접속 코드", type="password")
-            if st.form_submit_button("접속하기"):
+            
+            if st.form_submit_button("접속하기", use_container_width=True):
                 if code == "1234":
                     st.session_state.auth_role = "client"
+                    st.session_state.current_page = "신규 발주 등록" # 초기 페이지 설정
                     st.rerun()
                 elif code == "0000": # 관리자 코드
                     st.session_state.auth_role = "admin"
+                    st.session_state.current_page = "발주 관리" # 초기 페이지 설정
                     st.rerun()
                 else:
                     st.error("접속 코드가 올바르지 않습니다.")
@@ -82,7 +90,16 @@ if st.session_state.auth_role is None:
 # 6. 사이드바 메뉴 (권한별 노출)
 st.sidebar.title("🏭 Artispace")
 
-selected_page = None
+# 현재 페이지 상태 초기화
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = None
+
+# 메뉴 버튼 생성 함수 (선택된 메뉴는 primary 색상으로 표시)
+def menu_button(label, page_name):
+    btn_type = "primary" if st.session_state.current_page == page_name else "secondary"
+    if st.sidebar.button(label, key=f"nav_{page_name}", type=btn_type, use_container_width=True):
+        st.session_state.current_page = page_name
+        st.rerun()
 
 if st.session_state.auth_role == "admin":
     # 관리자용: 업무 모드 선택으로 그룹핑 효과
@@ -93,18 +110,22 @@ if st.session_state.auth_role == "admin":
     
     if mode == "👤 거래처 모드":
         st.sidebar.subheader("거래처 기능")
-        selected_page = st.sidebar.radio("메뉴", ["📝 신규 발주 등록", "🔍 진행상황 조회"])
+        menu_button("📝 신규 발주 등록", "신규 발주 등록")
+        menu_button("🔍 진행상황 조회", "진행상황 조회")
     else:
         st.sidebar.subheader("관리자 기능")
-        selected_page = st.sidebar.radio("메뉴", ["📋 발주 관리", "📤 엑셀 업로드"])
+        menu_button("📋 발주 관리", "발주 관리")
+        menu_button("📤 엑셀 업로드", "엑셀 업로드")
 else:
     # 거래처용: 요청하신 순서대로 배치 (등록 -> 조회)
     st.sidebar.header("거래처 메뉴")
-    selected_page = st.sidebar.radio("메뉴", ["📝 신규 발주 등록", "🔍 진행상황 조회"])
+    menu_button("📝 신규 발주 등록", "신규 발주 등록")
+    menu_button("🔍 진행상황 조회", "진행상황 조회")
 
 st.sidebar.divider()
 if st.sidebar.button("로그아웃"):
     st.session_state.auth_role = None
+    st.session_state.current_page = None
     st.rerun()
 
 # ==========================================
@@ -112,7 +133,7 @@ if st.sidebar.button("로그아웃"):
 # ==========================================
 
 # --- 1. 신규 발주 등록 ---
-if selected_page == "📝 신규 발주 등록":
+if st.session_state.current_page == "신규 발주 등록":
     st.title("📝 신규 발주 등록")
     st.markdown("##### 발주 정보 입력")
     with st.form("order_form", clear_on_submit=True):
@@ -167,7 +188,7 @@ if selected_page == "📝 신규 발주 등록":
                 st.error("업체명과 품명을 입력해주세요.")
 
 # --- 2. 진행상황 조회 ---
-elif selected_page == "🔍 진행상황 조회":
+elif st.session_state.current_page == "진행상황 조회":
     st.title("🔍 진행상황 조회")
     search = st.text_input("검색 (업체명, 품명)", placeholder="검색어 입력...")
     
@@ -204,7 +225,7 @@ elif selected_page == "🔍 진행상황 조회":
         st.info("데이터가 없습니다.")
 
 # --- 3. 발주 관리 (관리자) ---
-elif selected_page == "📋 발주 관리":
+elif st.session_state.current_page == "발주 관리":
     st.title("📋 발주 관리")
     df = load_data()
     if not df.empty:
@@ -330,7 +351,7 @@ elif selected_page == "📋 발주 관리":
         st.info("데이터가 없습니다.")
 
 # --- 4. 엑셀 업로드 (관리자) ---
-elif selected_page == "📤 엑셀 업로드":
+elif st.session_state.current_page == "엑셀 업로드":
     st.title("📤 엑셀 업로드")
     st.info("엑셀 헤더 예시: 업체명, 품명, 발주수량, 발주일, 납품일, 규격, 색상...")
     up_file = st.file_uploader("파일 선택", type=['xlsx', 'xls'])
