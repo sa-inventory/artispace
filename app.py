@@ -325,8 +325,8 @@ with tab2:
             filter_cols = {
                 "client_name": "업체명",
                 "product_name": "품명",
-                "manager": "담당자",
-                "order_type": "구분",
+                "manager": "발주담당자",
+                "order_type": "구분(신규/추가)",
                 "work_site": "작업지"
             }
             selected_filters = {}
@@ -381,33 +381,35 @@ with tab2:
         # 정렬: 발주일 기준 내림차순 (기본)
         filtered_df = filtered_df.sort_values(by='order_date', ascending=False)
         
-        # 컬럼명 한글 매핑
+        # 컬럼명 한글 매핑 (엑셀 헤더와 동일하게 수정)
         col_map = {
-            'order_date': '발주일',
-            'client_name': '업체명',
-            'product_name': '품명',
-            'quantity': '수량',
-            'unit': '규격',
             'status': '진행상태',
-            'manager': '담당자',
+            'email_sent_date': 'e-mail 발송일',
+            'order_type': '구분(신규/추가)',
+            'manager': '발주담당자',
+            'order_date': '발주일',
             'delivery_date': '납품일',
-            'delivery_to': '운송처',
-            'note': '비고',
-            'order_type': '구분',
             'work_site': '작업지',
+            'client_name': '업체명',
             'weaving': '제직',
             'dyeing': '염색',
+            'quantity': '발주수량',
+            'unit': '규격',
+            'product_name': '품명',
             'weight': '중량',
             'yarn_type': '사종',
             'color': '색상',
+            'delivery_to': '운송처',
             'contact': '연락처',
-            'email_sent_date': '이메일발송일'
+            'note': '비 고'
         }
         
-        # 표시할 컬럼 순서 지정 (중요한 것 먼저)
+        # 표시할 컬럼 순서 지정 (엑셀 파일 순서 + 진행상태)
         display_order = [
-            'order_date', 'client_name', 'product_name', 'quantity', 'unit', 'status', 
-            'manager', 'delivery_date', 'delivery_to', 'work_site', 'order_type', 'note'
+            'status',
+            'email_sent_date', 'order_type', 'manager', 'order_date', 'delivery_date', 'work_site',
+            'client_name', 'weaving', 'dyeing', 'quantity', 'unit', 'product_name', 'weight',
+            'yarn_type', 'color', 'delivery_to', 'contact', 'note'
         ]
         
         # 매핑 적용 및 컬럼 필터링
