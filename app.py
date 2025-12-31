@@ -279,12 +279,15 @@ with tab2:
     if data:
         df = pd.DataFrame(data)
         
-        # 날짜 변환 (비교를 위해 date 객체로 변환)
+        # 날짜 변환 (비교를 위해 datetime64 객체로 변환)
         df['order_date_dt'] = pd.to_datetime(df['order_date'], errors='coerce')
-        df['order_date_date'] = df['order_date_dt'].dt.date
         
-        min_date = df['order_date_date'].min() if not df['order_date_date'].isnull().all() else datetime.date.today()
-        max_date = df['order_date_date'].max() if not df['order_date_date'].isnull().all() else datetime.date.today()
+        # date_input을 위한 min/max 계산 (NaT 처리)
+        min_ts = df['order_date_dt'].min()
+        max_ts = df['order_date_dt'].max()
+        
+        min_date = min_ts.date() if pd.notnull(min_ts) else datetime.date.today()
+        max_date = max_ts.date() if pd.notnull(max_ts) else datetime.date.today()
         
         # 1. 상시 표시 필터 (기간, 진행상태)
         c1, c2 = st.columns([1, 2])
@@ -317,10 +320,13 @@ with tab2:
         # 날짜 필터 적용
         if len(date_range) == 2:
             start_d, end_d = date_range
-            # date 객체끼리 비교하여 오류 방지
+            # Timestamp로 변환하여 datetime64 컬럼과 비교 (TypeError 방지)
+            start_ts = pd.Timestamp(start_d)
+            end_ts = pd.Timestamp(end_d)
+            
             filtered_df = filtered_df[
-                (filtered_df['order_date_date'] >= start_d) & 
-                (filtered_df['order_date_date'] <= end_d)
+                (filtered_df['order_date_dt'] >= start_ts) & 
+                (filtered_df['order_date_dt'] <= end_ts)
             ]
         
         # 진행상태 필터 적용
@@ -386,7 +392,7 @@ with tab2:
         
         # 존재하는 컬럼만 선택하여 표시 (나머지 컬럼도 뒤에 붙여서 보여줌)
         mapped_display_order = [col_map[c] for c in display_order if c in filtered_df.columns]
-        other_cols = [c for c in display_df.columns if c not in mapped_display_order and c not in ['id', 'order_date_dt', 'order_date_date']]
+        other_cols = [c for c in display_df.columns if c not in mapped_display_order and c not in ['id', 'order_date_dt']]
         
         final_cols = mapped_display_order + other_cols
         
