@@ -61,70 +61,56 @@ def load_data():
 # 5. 화면 1: 로그인 페이지
 def login_page():
     st.markdown("<br><br><br>", unsafe_allow_html=True) # 상단 여백
-    c1, c2, c3 = st.columns([1, 1, 1]) # 중앙 정렬
-    with c2:
-        st.title("🏭 발주현황 조회")
-        with st.form("login_form"):
-            st.write("접속 코드를 입력하세요.")
-            code = st.text_input("Code", type="password", label_visibility="collapsed")
-            submitted = st.form_submit_button("로그인", type="primary")
-            
-            if submitted:
-                if code == "1234":
-                    st.session_state.auth_role = "client"
-                    st.session_state.current_page = "신규 발주 등록"
-                    st.rerun()
-                elif code == "0000":
-                    st.session_state.auth_role = "admin"
-                    st.session_state.current_page = "발주 관리"
-                    st.session_state.admin_mode = "admin"
-                    st.rerun()
-                else:
-                    st.error("코드가 올바르지 않습니다.")
+    login_container = st.empty()  # 화면 지움용 컨테이너
+    with login_container.container():
+        c1, c2, c3 = st.columns([1, 1, 1]) # 중앙 정렬
+        with c2:
+            st.title("🏭 발주현황 조회")
+            with st.form("login_form"):
+                st.write("접속 코드를 입력하세요.")
+                code = st.text_input("Code", type="password", label_visibility="collapsed")
+                submitted = st.form_submit_button("로그인", type="primary")
+                
+                if submitted:
+                    if code == "1234":
+                        st.session_state.auth_role = "client"
+                        st.session_state.current_page = "신규 발주 등록"
+                        login_container.empty()  # 로그인 성공 시 화면 즉시 비움
+                        st.rerun()
+                    elif code == "0000":
+                        st.session_state.auth_role = "admin"
+                        st.session_state.current_page = "발주 관리"
+                        login_container.empty()  # 로그인 성공 시 화면 즉시 비움
+                        st.rerun()
+                    else:
+                        st.error("코드가 올바르지 않습니다.")
 
 # 6. 화면 2: 메인 어플리케이션
 def main_app():
     # --- 사이드바 구성 ---
     st.sidebar.title("🏭 메뉴")
     
-    # 관리자일 경우 모드 전환 버튼 표시
-    if st.session_state.auth_role == "admin":
-        st.sidebar.caption("업무 모드 전환")
-        c1, c2 = st.sidebar.columns(2)
-        
-        if 'admin_mode' not in st.session_state:
-            st.session_state.admin_mode = "admin"
-            
-        # 버튼으로 모드 전환 (선택된 모드는 primary 색상)
-        if c1.button("👤 거래처", type="primary" if st.session_state.admin_mode == "client" else "secondary"):
-            st.session_state.admin_mode = "client"
-            st.rerun()
-        if c2.button("🛠️ 관리자", type="primary" if st.session_state.admin_mode == "admin" else "secondary"):
-            st.session_state.admin_mode = "admin"
-            st.rerun()
-        st.sidebar.divider()
-
     # 네비게이션 버튼 함수
-    def nav_btn(text, page_name):
+    def nav_btn(text, page_name, key=None):
         is_active = st.session_state.current_page == page_name
-        if st.sidebar.button(text, type="primary" if is_active else "secondary"):
+        if st.sidebar.button(text, type="primary" if is_active else "secondary", use_container_width=True, key=key):
             st.session_state.current_page = page_name
             st.rerun()
 
     # 메뉴 렌더링
-    is_admin_view = (st.session_state.auth_role == "admin" and st.session_state.get('admin_mode') == "admin")
-    
-    if is_admin_view:
+    # 1. 거래처 기능 (공통)
+    nav_btn("📝 신규 발주 등록", "신규 발주 등록", key="nav_new")
+    nav_btn("🔍 진행상황 조회", "진행상황 조회", key="nav_search")
+
+    # 2. 관리자 기능 (관리자만 보임)
+    if st.session_state.auth_role == "admin":
+        st.sidebar.divider()
         st.sidebar.subheader("관리자 기능")
-        nav_btn("📋 발주 관리", "발주 관리")
-        nav_btn("📤 엑셀 업로드", "엑셀 업로드")
-    else:
-        st.sidebar.subheader("거래처 기능")
-        nav_btn("📝 신규 발주 등록", "신규 발주 등록")
-        nav_btn("🔍 진행상황 조회", "진행상황 조회")
+        nav_btn("📋 발주 관리", "발주 관리", key="nav_manage")
+        nav_btn("📤 엑셀 업로드", "엑셀 업로드", key="nav_upload")
 
     st.sidebar.divider()
-    if st.sidebar.button("로그아웃", type="secondary"):
+    if st.sidebar.button("로그아웃", type="secondary", use_container_width=True):
         st.session_state.auth_role = None
         st.session_state.current_page = None
         st.rerun()
