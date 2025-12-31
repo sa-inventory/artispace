@@ -166,8 +166,8 @@ with tab2:
                         "product_name": str(row.get("품명", "")),
                         "quantity": row.get("발주수량", 0),
                         "unit": str(row.get("규격", "yds")), # 규격을 단위로 사용
-                        "order_date": str(row.get("발주일", datetime.datetime.now().strftime("%Y-%m-%d"))),
-                        "delivery_date": str(row.get("납품일", "")),
+                        "order_date": row.get("발주일", datetime.datetime.now().strftime("%Y-%m-%d")),
+                        "delivery_date": row.get("납품일", ""),
                         "delivery_to": str(row.get("운송처", "")),
                         "manager": str(row.get("발주담당자", "")),
                         "order_type": str(row.get("구분(신규/추가)", "")),
@@ -178,7 +178,7 @@ with tab2:
                         "yarn_type": str(row.get("사종", "")),
                         "color": str(row.get("색상", "")),
                         "contact": str(row.get("연락처", "")),
-                        "email_sent_date": str(row.get("e-mail 발송일", "")),
+                        "email_sent_date": row.get("e-mail 발송일", ""),
                         "note": str(row.get("비 고", "")),
                         "status": "발주접수",
                         "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -315,9 +315,13 @@ with tab2:
         # 날짜 필터 적용
         if len(date_range) == 2:
             start_d, end_d = date_range
+            # datetime.date 객체와 datetime64 시리즈 비교 시 발생하는 TypeError 해결을 위해 Timestamp로 변환
+            start_ts = pd.Timestamp(start_d)
+            end_ts = pd.Timestamp(end_d)
+            
             filtered_df = filtered_df[
-                (filtered_df['order_date_dt'].dt.date >= start_d) & 
-                (filtered_df['order_date_dt'].dt.date <= end_d)
+                (filtered_df['order_date_dt'] >= start_ts) & 
+                (filtered_df['order_date_dt'] <= end_ts)
             ]
         
         # 선택된 조건 표시용 텍스트
