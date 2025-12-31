@@ -8,7 +8,7 @@ import os
 import io
 
 # 1. 페이지 설정 (반드시 가장 윗줄에 있어야 함)
-st.set_page_config(page_title="Artispace 공정관리", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="발주현황 조회 시스템", layout="wide", page_icon="🏭")
 
 # 2. 스타일 커스텀 (화면 여백 줄이기)
 st.markdown("""
@@ -57,9 +57,40 @@ def load_data():
     except:
         return pd.DataFrame()
 
-# 5. 사이드바 메뉴 (화면 분리)
+# 5. 로그인 및 세션 관리
+if 'auth_role' not in st.session_state:
+    st.session_state.auth_role = None
+
+if st.session_state.auth_role is None:
+    st.title("🏭 발주현황 조회 시스템")
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        with st.form("login_form"):
+            st.subheader("로그인")
+            code = st.text_input("접속 코드", type="password")
+            if st.form_submit_button("접속하기"):
+                if code == "1234":
+                    st.session_state.auth_role = "client"
+                    st.rerun()
+                elif code == "0000": # 관리자 코드
+                    st.session_state.auth_role = "admin"
+                    st.rerun()
+                else:
+                    st.error("접속 코드가 올바르지 않습니다.")
+    st.stop()
+
+# 6. 사이드바 메뉴 (권한별 노출)
 st.sidebar.title("🏭 Artispace")
-menu = st.sidebar.radio("메뉴 선택", ["거래처용 (조회/등록)", "관리자용 (공정 관리)"])
+
+if st.session_state.auth_role == "admin":
+    menu = st.sidebar.radio("메뉴 선택", ["거래처용 (조회/등록)", "관리자용 (공정 관리)"])
+else:
+    menu = "거래처용 (조회/등록)"
+
+st.sidebar.divider()
+if st.sidebar.button("로그아웃"):
+    st.session_state.auth_role = None
+    st.rerun()
 
 # ==========================================
 # VIEW 1: 거래처용
@@ -67,104 +98,97 @@ menu = st.sidebar.radio("메뉴 선택", ["거래처용 (조회/등록)", "관�
 if menu == "거래처용 (조회/등록)":
     st.title("📦 거래처 발주 시스템")
     
-    with st.sidebar:
-        st.divider()
-        pw = st.text_input("🔒 접속 코드", type="password")
+    tab_view, tab_reg = st.tabs(["🔍 진행상황 조회", "📝 신규 발주 등록"])
     
-    if pw == "1234":
-        tab_view, tab_reg = st.tabs(["🔍 진행상황 조회", "📝 신규 발주 등록"])
+    # --- 조회 탭 ---
+    with tab_view:
+        search = st.text_input("검색 (업체명, 품명)", placeholder="검색어 입력...")
         
-        # --- 조회 탭 ---
-        with tab_view:
-            search = st.text_input("검색 (업체명, 품명)", placeholder="검색어 입력...")
+        df = load_data()
+        if not df.empty:
+            # 필터링
+            if search:
+                mask = df['client_name'].astype(str).str.contains(search, na=False) | \
+                       df['product_name'].astype(str).str.contains(search, na=False)
+                df = df[mask]
             
-            df = load_data()
-            if not df.empty:
-                # 필터링
-                if search:
-                    mask = df['client_name'].astype(str).str.contains(search, na=False) | \
-                           df['product_name'].astype(str).str.contains(search, na=False)
-                    df = df[mask]
-                
-                # 보여줄 컬럼 정의
-                cols_client = {
-                    'status': '진행상태', 'order_date': '발주일', 'client_name': '업체명', 
-                    'product_name': '품명', 'quantity': '수량', 'unit': '규격', 'color': '색상',
-                    'weaving_date': '제직일', 'dyeing_date': '염색일', 'sewing_date': '봉제일', 
-                    'shipping_date': '출고일', 'shipping_method': '출고방법', 'shipping_dest_name': '출고지',
-                    'delivery_date': '납품요청일', 'note': '비고'
+            # 보여줄 컬럼 정의
+            cols_client = {
+                'status': '진행상태', 'order_date': '발주일', 'client_name': '업체명', 
+                'product_name': '품명', 'quantity': '수량', 'unit': '규격', 'color': '색상',
+                'weaving_date': '제직일', 'dyeing_date': '염색일', 'sewing_date': '봉제일', 
+                'shipping_date': '출고일', 'shipping_method': '출고방법', 'shipping_dest_name': '출고지',
+                'delivery_date': '납품요청일', 'note': '비고'
+            }
+            
+            # 존재하는 컬럼만 선택
+            avail_cols = [c for c in cols_client.keys() if c in df.columns]
+            df_show = df[avail_cols].rename(columns=cols_client).fillna("")
+            
+            st.dataframe(
+                df_show, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "수량": st.column_config.NumberColumn(format="%d"),
                 }
-                
-                # 존재하는 컬럼만 선택
-                avail_cols = [c for c in cols_client.keys() if c in df.columns]
-                df_show = df[avail_cols].rename(columns=cols_client).fillna("")
-                
-                st.dataframe(
-                    df_show, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    column_config={
-                        "수량": st.column_config.NumberColumn(format="%d"),
-                    }
-                )
-            else:
-                st.info("데이터가 없습니다.")
+            )
+        else:
+            st.info("데이터가 없습니다.")
 
-        # --- 등록 탭 ---
-        with tab_reg:
-            st.markdown("##### 발주 정보 입력")
-            with st.form("order_form", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                client_name = c1.text_input("업체명 (필수)")
-                product_name = c2.text_input("품명 (필수)")
-                
-                c3, c4, c5 = st.columns(3)
-                quantity = c3.number_input("수량", min_value=0, step=10)
-                spec = c4.text_input("규격")
-                color = c5.text_input("색상")
-                
-                c6, c7, c8 = st.columns(3)
-                yarn = c6.text_input("사종")
-                weight = c7.text_input("중량")
-                otype = c8.selectbox("구분", ["신규", "추가", "샘플"])
-                
-                c9, c10 = st.columns(2)
-                manager = c9.text_input("담당자")
-                contact = c10.text_input("연락처")
-                
-                c11, c12 = st.columns(2)
-                odate = c11.date_input("발주일", datetime.date.today())
-                ddate = c12.date_input("납품요청일", datetime.date.today() + datetime.timedelta(days=7))
-                
-                st.markdown("---")
-                st.caption("추가 정보")
-                c13, c14, c15 = st.columns(3)
-                weaving = c13.text_input("제직 정보")
-                dyeing = c14.text_input("염색 정보")
-                site = c15.text_input("작업지")
-                
-                c16, c17 = st.columns(2)
-                dest = c16.text_input("운송처")
-                note = c17.text_input("비고")
-                
-                if st.form_submit_button("발주 등록 완료"):
-                    if client_name and product_name:
-                        new_doc = {
-                            "client_name": client_name, "product_name": product_name, "quantity": quantity,
-                            "unit": spec, "color": color, "yarn_type": yarn, "weight": weight,
-                            "order_type": otype, "manager": manager, "contact": contact,
-                            "order_date": str(odate), "delivery_date": str(ddate),
-                            "weaving": weaving, "dyeing": dyeing, "work_site": site,
-                            "delivery_to": dest, "note": note,
-                            "status": "발주접수", "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        db.collection("production_orders").add(new_doc)
-                        st.success("등록되었습니다.")
-                        st.rerun()
-                    else:
-                        st.error("업체명과 품명을 입력해주세요.")
-    else:
-        st.info("👈 사이드바에 접속 코드를 입력해주세요.")
+    # --- 등록 탭 ---
+    with tab_reg:
+        st.markdown("##### 발주 정보 입력")
+        with st.form("order_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            client_name = c1.text_input("업체명 (필수)")
+            product_name = c2.text_input("품명 (필수)")
+            
+            c3, c4, c5 = st.columns(3)
+            quantity = c3.number_input("수량", min_value=0, step=10)
+            spec = c4.text_input("규격")
+            color = c5.text_input("색상")
+            
+            c6, c7, c8 = st.columns(3)
+            yarn = c6.text_input("사종")
+            weight = c7.text_input("중량")
+            otype = c8.selectbox("구분", ["신규", "추가", "샘플"])
+            
+            c9, c10 = st.columns(2)
+            manager = c9.text_input("담당자")
+            contact = c10.text_input("연락처")
+            
+            c11, c12 = st.columns(2)
+            odate = c11.date_input("발주일", datetime.date.today())
+            ddate = c12.date_input("납품요청일", datetime.date.today() + datetime.timedelta(days=7))
+            
+            st.markdown("---")
+            st.caption("추가 정보")
+            c13, c14, c15 = st.columns(3)
+            weaving = c13.text_input("제직 정보")
+            dyeing = c14.text_input("염색 정보")
+            site = c15.text_input("작업지")
+            
+            c16, c17 = st.columns(2)
+            dest = c16.text_input("운송처")
+            note = c17.text_input("비고")
+            
+            if st.form_submit_button("발주 등록 완료"):
+                if client_name and product_name:
+                    new_doc = {
+                        "client_name": client_name, "product_name": product_name, "quantity": quantity,
+                        "unit": spec, "color": color, "yarn_type": yarn, "weight": weight,
+                        "order_type": otype, "manager": manager, "contact": contact,
+                        "order_date": str(odate), "delivery_date": str(ddate),
+                        "weaving": weaving, "dyeing": dyeing, "work_site": site,
+                        "delivery_to": dest, "note": note,
+                        "status": "발주접수", "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    db.collection("production_orders").add(new_doc)
+                    st.success("등록되었습니다.")
+                    st.rerun()
+                else:
+                    st.error("업체명과 품명을 입력해주세요.")
 
 # ==========================================
 # VIEW 2: 관리자용
